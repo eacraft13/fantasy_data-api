@@ -1,17 +1,26 @@
-global.__base = __dirname + '/';
+var _       = require('lodash');
+var cluster = require('cluster');
+var os      = require('os');
 
-var _ = require('lodash');
 
-// TODO: add clustering here (require('cluster'))
 
-var config = {
-    app: {},
-    //app:       _.merge(require('./config/app') || {},       require('./secrets/app')),
-    express: {},
-    //express:   _.merge(require('./config/express') || {},   require('./secrets/express')),
-    //rethinkdb: _.merge(require('./config/rethinkdb') || {}, require('./secrets/rethinkdb'))
-    rethinkdb: require('./config/rethinkdb')
-};
+// Master
+if (cluster.isMaster) {
+    for (var i = 0; i < os.cpus().length; i++)
+        cluster.fork();
 
-var app = require('./lib/index')(config);
-app.listen(config.app.port || 3000);
+    // Replace a dead worker
+    cluster.on('exit', function(worker, code, signal) {
+        console.log('Worker', worker.process.pid, 'died with code', code, '; restarting...');
+        cluster.fork();
+    });
+}
+
+
+
+// Children
+else {
+    var config = require('./config');
+    var app = require('./lib/index')(config);
+    app.listen(config.app.port);
+}
